@@ -1,28 +1,3 @@
-/* <script> 
-    let countdown = 3;
-    let countdownElement = document.getElementById('countdown');
-    let interval = setInterval(function() {
-        countdown--;
-        if (countdownElement) {
-            countdownElement.textContent = countdown;
-        }
-        if (countdown <= 0) {
-            clearInterval(interval);
-            const message = document.getElementById('success-message');
-            if (message) {
-                message.style.display = 'none';
-            }
-        }
-    }, 1000); // Run every second
-    </script> 
-            <?php
-        if (isset($_SESSION['success'])) {
-            echo '<div id="success-message">'.$_SESSION['success'].' <span id="countdown">5</span> seconds remaining...</div>';
-            unset($_SESSION['success']);
-        }
-        ?>
-    */
-
     // Delete confirmation
     function confirmDelete(id) {
         var deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
@@ -34,7 +9,7 @@
     // View student profile
     function viewProfile(id) {
         $.get('display.php', {
-            get_student: 1,
+            get_student:true,
             id: id
         }, function(data) {
             try {
@@ -54,35 +29,35 @@
                     <div class="profile-details">
                         <div class="row detail-row">
                             <div class="col-md-4 detail-label">Gender:</div>
-                            <div class="col-md-8">${student.sex}</div>
+                            <div class="col-md-8 detail-info">${student.sex}</div>
                         </div>
                         <div class="row detail-row">
                             <div class="col-md-4 detail-label">ID Number:</div>
-                            <div class="col-md-8">${student.idNumber}</div>
+                            <div class="col-md-8 detail-info">${student.idNumber}</div>
                         </div>
                         <div class="row detail-row">
                             <div class="col-md-4 detail-label">Department:</div>
-                            <div class="col-md-8">${student.department}</div>
+                            <div class="col-md-8 detail-info">${student.department}</div>
                         </div>
                         <div class="row detail-row">
                             <div class="col-md-4 detail-label">Batch:</div>
-                            <div class="col-md-8">${student.year}</div>
+                            <div class="col-md-8 detail-info">${student.year}</div>
                         </div>
                         <div class="row detail-row">
                             <div class="col-md-4 detail-label">Campus:</div>
-                            <div class="col-md-8">${student.campus}</div>
+                            <div class="col-md-8 detail-info">${student.campus}</div>
                         </div>
                         <div class="row detail-row">
                             <div class="col-md-4 detail-label">PC Serial Number:</div>
-                            <div class="col-md-8">${student.pcSerialNumber}</div>
+                            <div class="col-md-8 detail-info">${student.pcSerialNumber}</div>
                         </div>
                         <div class="row detail-row">
                             <div class="col-md-4 detail-label">PC Model:</div>
-                            <div class="col-md-8">${student.pcModel || 'Not specified'}</div>
+                            <div class="col-md-8 detail-info">${student.pcModel || 'Not specified'}</div>
                         </div>
                         <div class="row detail-row">
                             <div class="col-md-4 detail-label">Contact:</div>
-                            <div class="col-md-8">${student.contact || 'Not provided'}</div>
+                            <div class="col-md-8 detail-info">${student.contact || 'Not provided'}</div>
                         </div>
                     </div>
                 `;
@@ -102,25 +77,7 @@
     function closeProfile() {
         $('#profileOverlay').hide();
     }
-
-    // Form validation
-    (function() {
-        'use strict'
-        
-        var forms = document.querySelectorAll('.needs-validation')
-        
-        Array.prototype.slice.call(forms)
-            .forEach(function(form) {
-                form.addEventListener('submit', function(event) {
-                    if (!form.checkValidity()) {
-                        event.preventDefault()
-                        event.stopPropagation()
-                    }
-                    
-                    form.classList.add('was-validated')
-                }, false)
-            })
-    })()
+    
     // Array of departments in Haramaya University (Example)
     const departments = [
             // College of Agriculture and Environmental Sciences (CAES)
@@ -209,3 +166,4 @@
         option.textContent = department;
         departmentSelect.appendChild(option);
     });
+

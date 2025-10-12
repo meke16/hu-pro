@@ -4,7 +4,8 @@ session_start();
 $self = $_SERVER['PHP_SELF'];
 $current_year = date('Y'); // Current year for filtering
 
-// Handle AJAX student data request (for both edit and info)
+
+// Handle AJAX student data request (for info)
 if (isset($_GET['get_student'])) {
     $id = mysqli_real_escape_string($conn, $_GET['id']);
     $sql = "SELECT * FROM students WHERE id = '$id'";
@@ -18,19 +19,25 @@ if (isset($_GET['get_student'])) {
     }
     exit();
 }
+/* I use again and again for user input
+ built fuction mysqli_real_escape_string
+ to escape special char and prevent system from
+ crashing and I use for input only under control of user */
 
-// Handle form submission
+ // Handle form submission
+
 if (isset($_POST['submit'])) {
-    $name = ucwords(strtolower($_POST['name']));
+    $name = htmlspecialchars(ucwords(strtolower($_POST['name'])));
     $sex = $_POST['sex'];
     $idNumber = mysqli_real_escape_string($conn, $_POST['idNumber']);
     $department = ucwords(strtolower($_POST['department']));
     $campus = $_POST['campus']; // Fixed campus name
     $pcSerialNumber = mysqli_real_escape_string($conn, $_POST['pcSerialNumber']);
     $pcModel = mysqli_real_escape_string($conn, $_POST['pcModel']);
-    $contact = $_POST['contact'];
+    $contact = mysqli_real_escape_string($conn, $_POST['contact']);
     $year = $_POST['year'];
     
+
     // Handle file upload
     $photo = '';
     if (isset($_FILES['photo']) && $_FILES['photo']['error'] == 0) {
@@ -70,10 +77,11 @@ if (isset($_POST['submit'])) {
     }
     else {
         // Insert new student
-        $sql = "INSERT INTO students (name, sex, idNumber, department, campus, pcSerialNumber, pcModel, contact, photo, year) 
-                        VALUES ('$name', '$sex', '$idNumber', '$department', '$campus', '$pcSerialNumber', '$pcModel', '$contact', '$photo', '$year')";
-                         if ($conn->query($sql) === TRUE) {
-                            echo "<script> alert(`New record created successfully`)</script>";
+        $sql = $conn->prepare("INSERT INTO students (name, sex, idNumber, department, campus, pcSerialNumber, pcModel, contact, photo, year) 
+                        VALUES (?,?,?,?,?,?,?,?,?,?)");
+        $sql->bind_param("ssssssssss",$name,$sex,$idNumber,$department,$campus,$pcSerialNumber,$pcModel,$contact,$photo,$year);
+                         if ($sql->execute()) {
+                            $_SESSION['success'] = "Student record Added successfully";
                             header("location: display.php");
                             exit();
                         } else {
@@ -85,17 +93,7 @@ if (isset($_POST['submit'])) {
 if (isset($_GET['deleteid'])) {
     $id = mysqli_real_escape_string($conn, $_GET['deleteid']);
     
-    // First get photo path to delete the file
-    $sql_photo = "SELECT photo FROM students WHERE id='$id'";
-    $result = $conn->query($sql_photo);
-    if ($result->num_rows > 0) {
-        $row = $result->fetch_assoc();
-        if (!empty($row['photo']) && file_exists($row['photo'])) {
-            unlink($row['photo']);
-        }
-    }
-    
-    $sql = "DELETE FROM students WHERE id='$id'";
+    $sql = "DELETE  FROM students WHERE id='$id'";
     if ($conn->query($sql) === TRUE) {
         $_SESSION['success'] = "Student record deleted successfully";
     } else {
@@ -116,9 +114,9 @@ $whereConditions = [];
 foreach ($searchTerms as $term) {
     $term = trim($term); 
     if (!empty($term)) {
-        $escapedTerm = mysqli_real_escape_string($conn, $term); 
+        $escapedTerm = mysqli_real_escape_string($conn, $term);  
 
-        $whereConditions[] = "(name LIKE '%$escapedTerm%' OR idNumber LIKE '%$escapedTerm%' OR department LIKE '%$escapedTerm%')";
+        $whereConditions[] = "(name LIKE '%$escapedTerm%' OR idNumber LIKE '%$escapedTerm%')";
     }
 }
 
@@ -141,89 +139,37 @@ $num = 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PC Checkup System - Haramaya University</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="styles.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
-        .header {
-            background-color: #003366;
-            color: white;
-            padding: 20px 0;
-            margin-bottom: 30px;
-        }
-        .cl1 {
-            font-size: 0.7rem;
-        }
-        .profile-img {
-            width: 150px;
-            height: 150px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 5px solid #003366;
-        }
-        .overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            z-index: 1000;
-            overflow-y: auto;
-        }
-        .overlay-content {
-            background-color:rgba(204, 207, 208, 0.8);
-            margin: 50px auto;
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 800px;
-        }
-        .detail-row {
-            margin-bottom: 10px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        .detail-label {
-            font-weight: bold;
-            color: #003366;
-        }
-        @media print {
-            .no-print {
-                display: none !important;
-            }
-        }
-    </style>
 </head>
-
 <body>
-<header class="header text-center">
+<header class="header text-center no-print">
         <h1>PC Checkup System</h1>
-        <p class="lead mt-2">Haramaya University - <?php echo $current_year; ?></p>
+        <p style="text-decoration: underline white;" class="lead mt-2">Haramaya University - <?php echo $current_year; ?></p>
     </header>
 
     <div class="container">
         <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert" >
+            <!-- <div class="alert alert-danger text-center"  id="error-message"> -->
+            <div class="alert alert-danger text-center error-alert" id="error-message">
                 <?= $_SESSION['error']; unset($_SESSION['error']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
         
         <?php if (isset($_SESSION['success'])): ?>
-            <div class="alert alert-success alert-dismissible fade show" role="alert" id="success-message">
+            <div class="alert alert-success text-center success-alert" id="success-message">
                 <?= $_SESSION['success']; unset($_SESSION['success']); ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
 
-        <div class="d-flex justify-content-between mb-4 no-print">
-            <a href="home.php" class="btn btn-secondary">
+        <div class="d-flex justify-content-between mb-4 no-print buto1">
+            <a href="index.php" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> Go Back
             </a>
             <button class="btn btn-primary" onclick="window.print()">
@@ -237,7 +183,7 @@ $num = 0;
             </button>
 
             <div id="studentForm" class="collapse">
-                <form method="POST" class="row g-3 needs-validation" novalidate enctype="multipart/form-data">
+                <form  id="form1"method="POST" class="row g-3 needs-validation" novalidate enctype="multipart/form-data">
                     <input type="hidden" name="edit_id" id="edit_id" value="0">
                     <div class="col-md-6">
                         <label class="form-label">Full Name</label>
@@ -255,8 +201,9 @@ $num = 0;
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">ID Number</label>
-                        <input type="text" class="form-control" name="idNumber" id="idNumber" required>
-                        <div class="invalid-feedback">Please enter ID number.</div>
+                        <input type="text" class="form-control" name="idNumber" id="idNumber" required minlength="4">
+                        <div class="invalid-feedback">Please enter correct ID number.</div>
+                        <div class="form-text">Id number at least 4 charachter long.</div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="department">Department</label>
@@ -302,7 +249,7 @@ $num = 0;
                             <option value="7">Seven Year</option>
                         </select>
                     </div>
-                    <div class="col-md-12">
+                    <div class="col-md-6">
                         <label class="form-label">Photo (Optional)</label>
                         <input type="file" class="form-control" name="photo" id="photo" accept="image/jpeg, image/png">
                         <div class="form-text">Only JPG/PNG images accepted</div>
@@ -311,7 +258,7 @@ $num = 0;
                         <button type="submit" class="btn btn-success" name="submit">
                             <i class="bi bi-save"></i> Save Record
                         </button>
-                        <button type="button" class="btn btn-secondary" onclick="closeForm()">
+                        <button type="button" class="btn btn-danger" onclick="closeForm()">
                             <i class="bi bi-x"></i> Cancel
                         </button>
                     </div>
@@ -319,9 +266,9 @@ $num = 0;
             </div>
         </div>
 
-        <div class="search-box no-print my-3">
+        <div class="s   earch-box no-print my-3">
             <form method="POST" class="input-group">
-                <input autocomplete="off" type="search" class="form-control" placeholder="Search by name, ID or department..." 
+                <input autocomplete="off" type="search" class="form-control" placeholder="Search by name or ID..." 
                     name="search_query" value="<?php echo htmlspecialchars($searchQuery); ?>">
                 <button type="submit" class="btn btn-primary" name="search">
                     <i class="bi bi-search"></i> Search
@@ -329,7 +276,7 @@ $num = 0;
             </form>
         </div>
 
-        <div class="table-responsive cl1">
+        <di$v class="table-responsive cl1">
             <table class="table table-hover zoom-table">
                 <thead class="table-dark">
                     <tr>
@@ -387,7 +334,7 @@ $num = 0;
                         <?php endwhile; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="text-center">No PC checkup records found for <?php echo $year; ?>.</td>
+                            <td colspan="8" class="text-center">No PC checkup records found for <?php echo $current_year; ?>.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -395,7 +342,7 @@ $num = 0;
         </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
+    <!-- Delete Confirmation Modal section -->
     <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -414,7 +361,7 @@ $num = 0;
         </div>
     </div>
 
-    <!-- Profile View Overlay -->
+    <!-- Profile View Overlay section -->
     <div id="profileOverlay" class="overlay">
         <div class="overlay-content">
         <button style="margin-left: 86%;" class="btn btn-danger mt-1" onclick="closeProfile()">Close</button>
@@ -423,5 +370,35 @@ $num = 0;
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="main.js"></script>
+    <script> 
+        function closeForm() {
+        const formElement = document.getElementById('studentForm');
+        const collapseInstance = bootstrap.Collapse.getOrCreateInstance(formElement);
+        collapseInstance.hide(); // Collapse it
+    }
+    //to remove alert messages after displayed in defined period of time (mine is 3-second).
+            setTimeout(function() {
+        const alertElement1 = document.getElementById('error-message');
+        const alertElement2 = document.getElementById('success-message');
+        
+        if (alertElement1) {
+            var bootstrapAlert1 = new bootstrap.Alert(alertElement1);
+            bootstrapAlert1.close(); 
+        }
+        
+        if (alertElement2) {
+            var bootstrapAlert2 = new bootstrap.Alert(alertElement2);
+            bootstrapAlert2.close(); 
+        }
+    }, 3000); 
+    document.getElementById("form1").onsubmit = function(event) {
+            var idNumber = document.getElementById("idNumber").value;
+            if (idNumber.length < 4) {
+                alert("The ID number must be at least 4 characters long.");
+                event.preventDefault(); // Prevent form submission
+            }
+        };
+    </script>
+    </body>
 </body>
 </html>

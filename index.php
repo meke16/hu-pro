@@ -17,18 +17,12 @@
         }
 
         .container {
-            background-color: white;
+            background-color: rgb(18, 163, 151);
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             text-align: center;
             width: 300px;
-        }
-
-        h1 {
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 20px;
         }
 
         button {
@@ -58,8 +52,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>student pc Registration</h1>
-        <a href="display.php"><button>Get-In</button></a>
+        <h2>student pc Checkup System</h2>
+        <a href="display.php"><button>Click Here</button></a>
     </div>
 </body>
 </html>

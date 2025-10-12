@@ -61,13 +61,16 @@ if (isset($_POST['submit'])) {
             $_SESSION['error'] = 'Only JPG, JPEG, PNG files are allowed for photo.';
         }
     }
+    $sql_check = $conn->query("SELECT id FROM `students` WHERE `id` != '$id' and `idNumber` = '$idNumber';");
+    if($sql_check->num_rows > 0) {
+        $_SESSION['error'] = 'student By this Id already exist!.';   
+    } 
+    else {
 
     // Update the data in the 'students' table using prepared statement
-    $sql = "UPDATE `students` SET name=?, sex=?, idNumber=?, department=?, 
-            campus=?, pcSerialNumber=?, pcModel=?, contact=?, photo=?, year=? WHERE id=?";
-    $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param(
-        $stmt,
+    $sql = $conn->prepare("UPDATE `students` SET name=?, sex=?, idNumber=?, department=?, 
+            campus=?, pcSerialNumber=?, pcModel=?, contact=?, photo=?, year=? WHERE id=?");
+    $sql->bind_param(
         "ssssssssssi",
         $name,
         $sex,
@@ -82,15 +85,17 @@ if (isset($_POST['submit'])) {
         $id
     );
 
-    $result = mysqli_stmt_execute($stmt);
+    $result = $sql->execute();
     
     // Check if the query was successful
     if ($result) {
-        header("Location: display.php");
+        echo "<script> window.location.href='display.php'; alert('data updated successfully!'); </script>";
+        // header(header: "Location: display.php");
         exit();
     } else {
         die(mysqli_error($conn));
     }
+}
 }
 ?>
 
@@ -110,7 +115,16 @@ if (isset($_POST['submit'])) {
     <div class="container">
         <!-- Display error messages if any -->
         <?php if (isset($_SESSION['error'])): ?>
-            <div class="alert alert-danger"><?php echo $_SESSION['error']; unset($_SESSION['error']); ?></div>
+            <div class="alert alert-danger text-center" id="error-message"><?php echo $_SESSION['error']; unset($_SESSION['error']); ?> </div>
+            <script>
+                 setTimeout(function(){
+                    const alertElement = document.getElementById('error-message');
+                    if (alertElement) {
+                        var bootstrapAlert = new bootstrap.Alert(alertElement);
+                        bootstrapAlert.close(); // Close the error alert
+                    }
+                } , 5000)
+            </script>
         <?php endif; ?>
         
         <!-- Form to update student data -->
@@ -118,7 +132,7 @@ if (isset($_POST['submit'])) {
             <h2 class="text-primary">Update Student Data</h2>
             <p class="lead">Please fill in the details below to update the student record.</p>
         </div>
-        <form method="POST" action="" enctype="multipart/form-data">
+        <form id="form1" method="POST" action="" enctype="multipart/form-data">
             <div class="form-group mb-3">
                 <label for="name">Name of Student</label>
                 <input type="text" class="form-control" id="name" placeholder="Enter Student's Name" name="name" autocomplete="off" value="<?php echo htmlspecialchars($name) ?>" required>
@@ -131,12 +145,13 @@ if (isset($_POST['submit'])) {
                 </select>
             </div>
             <div class="form-group mb-3">
-                <label for="section">Student Id</label>
-                <input type="text" class="form-control" id="grade" placeholder="Enter stu id" name="idNumber" autocomplete="off" value="<?php echo htmlspecialchars($idNumber) ?>" required>
+                <label for="stu id">Student Id</label>
+                <input  type="text" class="form-control" id="idNumber" placeholder="Enter stu id" name="idNumber" autocomplete="off" value="<?php echo htmlspecialchars($idNumber) ?>" required minlength="4">
             </div>
             <div class="form-group mb-3">
-                <label for="section">Department</label>
+                <label for="department">Department</label>
                 <input type="text" class="form-control" id="section" placeholder="Enter department" name="department" autocomplete="off" value="<?php echo htmlspecialchars($department) ?>" required>
+                <div class="invalid-feedback">Please enter correct ID number.</div>
             </div>
             <div class="form-group mb-3">
                 <label class="form-label">Campus</label>
@@ -188,11 +203,19 @@ if (isset($_POST['submit'])) {
             <button type="submit" class="btn btn-primary" name="submit">Update</button>
         </form>
     </div>
-
     <footer>
         <p>© 2025 Your Company. All rights reserved.</p>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+            document.getElementById("form1").onsubmit = function(event) {
+            var idNumber = document.getElementById("idNumber").value;
+            if (idNumber.length < 4) {
+                alert("The ID number must be at least 4 characters long.");
+                event.preventDefault(); // Prevent form submission
+            }
+        };
+        </script>
 </body>
 </html>
