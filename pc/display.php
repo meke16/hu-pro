@@ -1,0 +1,527 @@
+<?php
+include 'connect.php';
+session_start();
+$self = $_SERVER['PHP_SELF'];
+$current_year = date('Y'); // Current year for filtering
+
+
+// Handle AJAX student data request (for info)
+if (isset($_GET['get_student'])) {
+    $id = mysqli_real_escape_string($conn, $_GET['id']);
+    $sql = "SELECT * FROM students WHERE id = '$id'";
+    $result = $conn->query($sql);
+    
+    if ($result->num_rows > 0) {
+        $student = $result->fetch_assoc();
+        echo json_encode($student);
+    } else {
+        echo json_encode(['error' => 'Student record not found']);
+    }
+    exit();
+}
+/* I use again and again for user input
+ built fuction mysqli_real_escape_string
+ to escape special char and prevent system from
+ crashing and I use for input only under control of user */
+
+ // Handle form submission
+if (isset($_POST['submit'])) {
+    $name = htmlspecialchars(ucwords(strtolower($_POST['name'])));
+    $sex = $_POST['sex'];
+    $idNumber = mysqli_real_escape_string($conn, $_POST['idNumber']);
+    $department = ucwords(strtolower($_POST['department']));
+    $campus = $_POST['campus']; // Fixed campus name
+    $pcSerialNumber = mysqli_real_escape_string($conn, $_POST['pcSerialNumber']);
+    $pcModel = mysqli_real_escape_string($conn, $_POST['pcModel']);
+    $contact = mysqli_real_escape_string($conn, $_POST['contact']);
+    $year = $_POST['year'];
+    
+
+    // Handle file upload
+    $photo = '';
+    if (isset($_FILES['photo']) && $_FILES['photo']['error'] == 0) {
+        $target_dir = "uploads/";
+        if (!file_exists($target_dir)) {
+            mkdir($target_dir, 0777, true);
+        }
+        $file_ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+        $allowed_ext = ['jpg', 'jpeg', 'png'];
+        
+        if (in_array($file_ext, $allowed_ext)) {
+            $new_filename = uniqid('photo_', true) . '.' . $file_ext;
+            $target_file = $target_dir . $new_filename;
+            
+            if (move_uploaded_file($_FILES['photo']['tmp_name'], $target_file)) {
+                $photo = $target_file;
+            }
+        } else {
+            $_SESSION['error'] = 'Only JPG, JPEG, PNG files are allowed for photo.';
+        }
+    }
+    $sql_check = "SELECT id FROM `students` WHERE `idNumber` = '$idNumber'";
+    $result = $conn->query($sql_check);
+
+    // Validate inputs
+    if (empty($name)) {
+        $_SESSION['error'] = 'Name is required.';
+    } elseif (empty($idNumber)) {
+        $_SESSION['error'] = 'ID Number is required.';
+    } elseif (empty($department)) {
+        $_SESSION['error'] = 'Department is required.';
+    } elseif (empty($pcSerialNumber)) {
+        $_SESSION['error'] = 'PC Serial Number is required.';
+    }
+    elseif ($result->num_rows > 0) {
+                $_SESSION['error'] = 'This ID Number already exists in the system!';
+    }
+    else {
+        // Insert new student
+        $sql = $conn->prepare("INSERT INTO students (name, sex, idNumber, department, campus, pcSerialNumber, pcModel, contact, photo, year) 
+                        VALUES (?,?,?,?,?,?,?,?,?,?)");
+        $sql->bind_param("ssssssssss",$name,$sex,$idNumber,$department,$campus,$pcSerialNumber,$pcModel,$contact,$photo,$year);
+                         if ($sql->execute()) {
+                            $_SESSION['success'] = "Student record Added successfully";
+                            header("location: display.php");
+                            exit();
+                        } else {
+                            echo "Error: " . $sql . "<br>" . $conn->error;
+                        }
+            }
+        }
+// Handle delete request
+if (isset($_GET['deleteid'])) {
+    $id = mysqli_real_escape_string($conn, $_GET['deleteid']);
+    
+    $sql = "DELETE  FROM students WHERE id='$id'";
+    if ($conn->query($sql) === TRUE) {
+        $_SESSION['success'] = "Student record deleted successfully";
+    } else {
+        $_SESSION['error'] = "Error deleting student record: " . $conn->error;
+    }
+    header("Location: $self");
+    exit();
+}
+
+$searchQuery = '';
+if (isset($_POST['search']) && !empty(trim($_POST['search_query']))) {
+    $searchQuery = trim($_POST['search_query']);
+    $searchQuery = ucwords(strtolower($searchQuery));
+}
+$searchTerms = explode('+', $searchQuery);
+$whereConditions = [];
+
+foreach ($searchTerms as $term) {
+    $term = trim($term); 
+    if (!empty($term)) {
+        $escapedTerm = mysqli_real_escape_string($conn, $term);  
+
+        $whereConditions[] = "(name LIKE '%$escapedTerm%' OR idNumber LIKE '%$escapedTerm%')";
+    }
+}
+
+if (!empty($whereConditions)) {
+    $whereSql = implode(' OR ', $whereConditions);
+    
+    $sql = "SELECT * FROM students WHERE $whereSql ORDER BY name";
+} else {
+    $sql = "SELECT * FROM students ORDER BY name";
+}
+
+$result = mysqli_query($conn, $sql);
+
+if (!$result) {
+    die('Error executing query: ' . mysqli_error($conn));
+}
+
+$num = 0;
+$department = array(
+    // College of Agriculture and Environmental Sciences (CAES)
+"Animal and Range Science",
+"Natural Resources and Environmental Science",
+"Plant Sciences",
+"Agricultural Economics and Agribusiness",
+"Rural Development and Agricultural Extension",
+
+//College of Business and Economics (CBE)
+"Accounting",
+"Cooperatives",
+"Management",
+"Economics",
+"Public Administration and Development Management",
+
+//College of Computing and Informatics
+"Computer Science",
+"Information Science",
+"Information Technology",
+"Software Engineering",
+"Statistics",
+
+// College of Education and Behavioral Sciences
+"Pedagogy",
+"Special Needs",
+"Educational Planning and Management",
+"English Language Improvement Centre",
+
+// College of Health and Medical Sciences
+"Medicine",
+"Pharmacy",
+"Nursing and Midwifery",
+"Public Health",
+"Environmental Health Sciences",
+"Medical Laboratory Science",
+
+//College of Law
+"Law",
+
+// College of Natural and Computational Sciences
+"Biology",
+"Chemistry",
+"Mathematics",
+"Physics",
+
+//College of Social Sciences and Humanities
+"Afan Oromo, Literature and Communication",
+"Gender and Development Studies",
+"Foreign Languages and Journalism",
+"History and Heritage Management",
+"Geography and Environmental Studies",
+"Sociology",
+
+// College of Veterinary Medicine
+"Veterinary Medicine",
+"Veterinary Laboratory Technology",
+
+// Haramaya Institute of Technology
+"Agricultural Engineering",
+"Water Resources and Irrigation Engineering",
+"Civil Engineering",
+"Electrical and Computer Engineering",
+"Mechanical Engineering",
+"Chemical Engineering",
+"Food Science and Post-Harvest Technology",
+"Food Technology and Process Engineering",
+
+// Sport Sciences Academy
+"Sport Sciences",
+
+// College of Agro-Industry and Land Resources
+"Land Administration",
+"Dairy and Meat Technology",
+"Forest Resource Management",
+"Soil Resources and Watershed Management",
+"aaaaaaa"
+);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC Checkup System - Haramaya University</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+<header class="header text-center no-print">
+        <h1>PC Checkup System</h1>
+        <p style="text-decoration: underline white;" class="lead mt-2">Haramaya University - <?php echo $current_year; ?></p>
+    </header>
+    <div class="container">
+        <?php if (isset($_SESSION['error'])): ?>
+            <!-- <div class="alert alert-danger text-center"  id="error-message"> -->
+            <div class="alert alert-danger text-center error-alert" id="error-message">
+                <?= $_SESSION['error']; unset($_SESSION['error']); ?>
+            </div>
+        <?php endif; ?>
+        
+        <?php if (isset($_SESSION['success'])): ?>
+            <div class="alert alert-success text-center success-alert" id="success-message">
+                <?= $_SESSION['success']; unset($_SESSION['success']); ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="d-flex justify-content-between mb-4 no-print buto1">
+            <a href="home" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Go Back
+            </a>
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="bi bi-printer"></i> Print
+            </button>
+        </div>
+
+        <div class="form-container">
+            <button id="toggleFormBtn" class="btn btn-primary mb-4 no-print" data-bs-toggle="collapse" data-bs-target="#studentForm">
+                <i class="bi bi-person-plus"></i> Add New Record
+            </button>
+
+            <div id="studentForm" class="collapse">
+                <form  id="form1"method="POST" class="row g-3 needs-validation" novalidate enctype="multipart/form-data">
+                    <input type="hidden" name="edit_id" id="edit_id" value="0">
+                    <div class="col-md-6">
+                        <label class="form-label">Full Name</label>
+                        <input placeholder="John Doe" type="text" class="form-control" name="name" id="name" required>
+                        <div class="invalid-feedback">Please enter student's name.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Gender</label>
+                        <select class="form-select" name="sex" id="sex" required>
+                            <option value="" selected disabled>Select gender</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                        <div class="invalid-feedback">Please select gender.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">ID Number</label>
+                        <input placeholder="0998/16" type="text" class="form-control" name="idNumber" id="idNumber" required minlength="4">
+                        <div class="invalid-feedback">Please enter correct ID number.</div>
+                        <div class="form-text">Id number at least 4 charachter long.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="department">Department</label>
+                        <select class="form-select" name="department" id="department" required>
+                        <option value="">Select a Department</option>
+                            <?php foreach($department as $dep) :?>
+                            <option value="<?= $dep ?>"><?=  $dep ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="invalid-feedback">Please select a department.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Campus</label>
+                        <select class="form-select" name="campus" id="campus" required>
+                            <option value="" selected disabled>Select Campus</option>
+                            <option value="Main">Main</option>
+                            <option value="HiT">HiT</option>
+                            <option value="Station">Station</option>
+                            <option value="Harar">Harar</option>
+                        </select>
+                        <div class="invalid-feedback">Please choose campus.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">PC Serial Number</label>
+                        <input placeholder="5#1234555" type="text" class="form-control" name="pcSerialNumber" id="pcSerialNumber" required>
+                        <div class="invalid-feedback">Please enter PC serial number.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">PC Model</label>
+                        <input placeholder="Hp-Elitebbok" type="text" class="form-control" name="pcModel" id="pcModel">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Contact Number</label>
+                        <input placeholder="099918272" type="tel" class="form-control" name="contact" id="contact">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="year" class="form-label">Year </label>
+                        <select class="form-select" id="yaer" name="year" required>
+                            <option value="" selected disabled>Select Year</option>
+                            <?php for($i=0; $i<=7; $i++):?>
+                                <option value="<?= $i ?>">Year <?= $i ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Photo (Optional)</label>
+                        <input type="file" class="form-control" name="photo" id="photo" accept="image/jpeg, image/png">
+                        <div class="form-text">Only JPG/PNG images accepted</div>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-success" name="submit">
+                            <i class="bi bi-save"></i> Save Record
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="closeForm()">
+                            <i class="bi bi-x"></i> Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="s   earch-box no-print my-3">
+            <form method="POST" class="input-group">
+                <input autocomplete="off" type="search" class="form-control" placeholder="Search by name or ID..." 
+                    name="search_query" value="<?php echo htmlspecialchars($searchQuery); ?>">
+                <button type="submit" class="btn btn-primary" name="search">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </form>
+        </div>
+
+        <di$v class="table-responsive cl1">
+            <table class="table table-hover zoom-table">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Student Name</th>
+                          <th>Photo</th>
+                        <th>Gender</th>
+                        <th>Batch</th>
+                        <th>ID Number</th>
+                        <th>Department</th>
+                        <th>Campus</th>
+                        <th>PC Serial</th>
+                        <th class="no-print">PC Model</th>
+                      
+                        <th class="no-print text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($result -> num_rows > 0): 
+                         while ($row = $result->fetch_assoc()):
+                            $num++;
+                            $id = $row['id'];
+                            $name = $row['name'];
+                            $sex = $row['sex'];
+                            $year = $row['year'];
+                            $idNumber = $row['idNumber'];
+                            $department = $row['department'];
+                            $campus = $row['campus'];
+                            $pcSerialNumber = $row['pcSerialNumber'];
+                            $pcModel = $row['pcModel'];
+                            $photo = $row['photo'];
+                            ?>
+                            <tr>
+                                <td><?= $num; ?></td>
+                                <td>
+                                    <?= htmlspecialchars($name); ?>
+                                </td>
+                                <td>
+                                  <img style="border-radius: 50%; width:40px" src="<?= htmlspecialchars($photo) ?>" alt="photo">
+                                </td>
+                                <td><?= htmlspecialchars($sex); ?></td>
+                                <td><?= htmlspecialchars($year); ?></td>
+                                <td style="color:rgb(10, 127, 35); font-weight: bolder;">
+                                    <?= htmlspecialchars($idNumber); ?>
+                                </td>
+                                <td><?= htmlspecialchars($department); ?></td>
+                                <td><?= htmlspecialchars($campus); ?></td>
+                                <td style="color: blue; font-weight: bolder;">
+                                    <?= htmlspecialchars($pcSerialNumber); ?>
+                                </td>
+                                <td style="color: red;" class="psm no-print">
+                                    <?= htmlspecialchars($pcModel); ?>
+                                </td>
+
+                                <td class="no-print text-center">
+                                    <button class="btn btn-sm btn-primary" id="off">
+                                        <a  href="update.php?updateid=<?= $id; ?>" class="text-light">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                    </button>
+
+                                    <button class="btn btn-sm btn-danger" onclick="confirmDelete(<?= $id; ?>)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-info" onclick="viewProfile(<?= $id; ?>)">
+                                        <i class="bi bi-info-circle"></i> 
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="text-center">No PC checkup records found for <?php echo $current_year; ?>.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal section -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete this record? This action cannot be undone.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile View Overlay section -->
+    <div id="profileOverlay" class="overlay">
+        <div class="overlay-content">
+        <button style="margin-left: 86%;" class="btn btn-danger mt-1" onclick="closeProfile()">Close</button>
+            <div id="profileContent"></div>
+        </div>
+    </div>
+    <!-- Footer Section -->
+<footer class="footer">
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <h3 class="text-gradient">Haramaya University</h3>
+                <p>Excellence in Education, Research, and Community Service</p>
+                <p><small>PC Checkup Management System</small></p>
+            </div>
+            
+            <div class="footer-links">
+                <h4>Quick Links</h4>
+                <ul>
+                    <li><a href="home"><i class="bi bi-house-fill"></i> Home</a></li>
+                    <li><a href="display.php"><i class="bi bi-list-check"></i> Records</a></li>
+                    <li><a href="#"><i class="bi bi-info-circle"></i> About</a></li>
+                    <li><a href="#"><i class="bi bi-headset"></i> Support</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-contact">
+                <h4>Contact Info</h4>
+                <p><i class="bi bi-geo-alt-fill"></i> Harar, Ethiopia</p>
+                <p><i class="bi bi-telephone-fill"></i> +251 (0)25 553 0333</p>
+                <p><i class="bi bi-envelope-fill"></i> info@haramaya.edu.et</p>
+                <p><i class="bi bi-globe"></i> www.haramaya.edu.et</p>
+            </div>
+        </div>
+        
+        <div class="footer-bottom">
+            <p>&copy; <?php echo date('Y'); ?> Haramaya University - PC Checkup System. All rights reserved.</p>
+            <p class="mt-1">Developed with <i class="bi bi-heart-fill text-danger"></i> for Academic Excellence</p>
+        </div>
+    </div>
+</footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="main.js"></script>
+    <script> 
+        function closeForm() {
+        const formElement = document.getElementById('studentForm');
+        const collapseInstance = bootstrap.Collapse.getOrCreateInstance(formElement);
+        collapseInstance.hide(); // Collapse it
+    }
+    //to remove alert messages after displayed in defined period of time (mine is 3-second).
+            setTimeout(function() {
+        const alertElement1 = document.getElementById('error-message');
+        const alertElement2 = document.getElementById('success-message');
+        
+        if (alertElement1) {
+            var bootstrapAlert1 = new bootstrap.Alert(alertElement1);
+            bootstrapAlert1.close(); 
+        }
+        
+        if (alertElement2) {
+            var bootstrapAlert2 = new bootstrap.Alert(alertElement2);
+            bootstrapAlert2.close(); 
+        }
+    }, 3000); 
+    document.getElementById("form1").onsubmit = function(event) {
+            var idNumber = document.getElementById("idNumber").value;
+            if (idNumber.length < 4) {
+                alert("The ID number must be at least 4 characters long.");
+                event.preventDefault(); // Prevent form submission
+            }
+        };
+    </script>
+    </body>
+</body>
+</html>
