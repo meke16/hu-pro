@@ -2,7 +2,13 @@
 
 A simple PHP + MySQL web app for managing **student PC checkup / assignment records** at Haramaya University.
 
-![Project screenshot](sample-image/Screenshot%20from%202026-01-04%2021-39-45.png)
+## Screenshots
+
+![Screenshot 1](sample-image/home.png)
+
+![Screenshot 2](sample-image/work.png)
+
+![Screenshot 3](sample-image/detail.png)
 
 ## Features
 
